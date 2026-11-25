@@ -1,6 +1,6 @@
 {
-  "name": "nocoapp-dev",
+  "name": "Yunpu",
   "description": "云谱 — 宗谱与世系协作工作区",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

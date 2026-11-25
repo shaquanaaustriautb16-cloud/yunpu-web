@@ -1,29 +1,26 @@
 import { formatGenealogyDate, getPersonDateDisplay } from '../../date-input';
-import {
-  computeRegnalGregorianYear,
-  normalizeDatePoint,
-  resolveEraForRegnalParts,
-} from '../../date-input/calendar-adapter';
-import { toCalendarDatePoint } from '../../date-input/date-core';
-import type {
-  CalendarDatePoint,
-  GenealogyDate,
-} from '../../date-input/date.types';
+import type { GenealogyDate } from '../../date-input/date.types';
 import { formatGenealogyPlace, getPersonPlaceDisplay } from '../../place-input';
 import type { GenealogyPlace } from '../../place-input/place.types';
-import {
+import { getLineageGraph } from '../domain/lineageGraph';
+import type {
   PersonEventType,
   PersonLifeEvent,
   PersonRecord,
 } from '../types';
+import {
+  extractGregorianYear,
+  extractYearDisplay,
+  extractYearLabel,
+} from './dateRange';
 import { formatGivenName } from './nameUtils';
 import {
   computeAutoRankLabel,
-  getDerivedChildren,
-  getDerivedSpouses,
   normalizeEventType,
   normalizePersonForSave,
 } from './personHelpers';
+
+export { extractGregorianYear, extractYearDisplay, extractYearLabel };
 
 export const EVENT_TYPE_OPTIONS: ReadonlyArray<{
   value: PersonEventType;
@@ -113,20 +110,33 @@ export interface CoupleMarriageInfo {
   spouseEventId: string;
 }
 
+export function buildCoupleMarriageEventId(
+  partnerId: string,
+  spouseId: string
+): string {
+  return `ev-marriage-${partnerId}-${spouseId}`;
+}
+
 function matchMarriageEventOnRecord(
   ownerEvents: PersonLifeEvent[],
   otherId: string,
   otherGivenName: string,
   otherDisplayName: string,
-  spouseCount: number
+  spouseCount: number,
+  partnerId?: string,
+  spouseId?: string
 ): PersonLifeEvent | undefined {
   const marriageEvents = ownerEvents.filter(
     (ce) => normalizeEventType(ce.type) === 'marriage'
   );
   if (marriageEvents.length === 0) return undefined;
 
+  const coupleId =
+    partnerId && spouseId ? buildCoupleMarriageEventId(partnerId, spouseId) : null;
+
   const byDeterministicId = marriageEvents.find(
     (ce) =>
+      (coupleId !== null && ce.id === coupleId) ||
       ce.id === `ev-marriage-${otherId}` ||
       ce.id === `ev-marriage-partner-${otherId}`
   );
@@ -155,20 +165,25 @@ export function findCoupleMarriageInfo(
 ): CoupleMarriageInfo {
   const partnerName = resolvePersonDisplayName(partner, clanSurname);
   const spouseName = resolvePersonDisplayName(spouse, clanSurname);
+  const canonicalCoupleId = buildCoupleMarriageEventId(partner.id, spouse.id);
 
   const onPartner = matchMarriageEventOnRecord(
     partner.events || [],
     spouse.id,
     spouse.name,
     spouseName,
-    spouseCount
+    spouseCount,
+    partner.id,
+    spouse.id
   );
   const onSpouse = matchMarriageEventOnRecord(
     spouse.events || [],
     partner.id,
     partner.name,
     partnerName,
-    1
+    1,
+    partner.id,
+    spouse.id
   );
 
   const primary = onPartner || onSpouse;
@@ -185,8 +200,8 @@ export function findCoupleMarriageInfo(
     structuredDate,
     structuredPlace,
     description: primary?.description?.trim() || '',
-    partnerEventId: onPartner?.id || `ev-marriage-${spouse.id}`,
-    spouseEventId: onSpouse?.id || `ev-marriage-${partner.id}`,
+    partnerEventId: onPartner?.id || canonicalCoupleId,
+    spouseEventId: onSpouse?.id || canonicalCoupleId,
   };
 }
 
@@ -227,62 +242,6 @@ export function resolveRomanizedDisplayName(person: PersonRecord): string {
   return parts.join(' ');
 }
 
-function parseIsoYear(iso?: string | null): number | null {
-  if (!iso) return null;
-  const m = iso.match(/^(-?\d+)-/);
-  if (!m) return null;
-  const yr = parseInt(m[1], 10);
-  return Number.isFinite(yr) ? yr : null;
-}
-
-function extractPointGregorianYear(point: CalendarDatePoint): number | null {
-  const norm = normalizeDatePoint(point);
-  const normYear = parseIsoYear(norm.start);
-  if (normYear !== null) return normYear;
-
-  if (
-    point.calendar === 'gregorian' ||
-    point.calendar === 'chinese_lunisolar'
-  ) {
-    if (
-      typeof point.parts.year === 'number' &&
-      Number.isFinite(point.parts.year)
-    ) {
-      return point.parts.year;
-    }
-  } else if (point.calendar === 'regnal') {
-    const era = resolveEraForRegnalParts(point.parts);
-    if (era) {
-      return computeRegnalGregorianYear(era, point.parts.yearInEra);
-    }
-  }
-
-  return null;
-}
-
-export function extractGregorianYear(
-  structuredDate?: GenealogyDate | null
-): number | null {
-  if (!structuredDate) return null;
-
-  if (structuredDate.kind === 'date') {
-    const normalizedYear = parseIsoYear(structuredDate.normalized?.start);
-    if (normalizedYear !== null) return normalizedYear;
-    return extractPointGregorianYear(toCalendarDatePoint(structuredDate));
-  }
-
-  if (structuredDate.kind === 'range') {
-    return extractPointGregorianYear(structuredDate.start);
-  }
-
-  if (structuredDate.kind === 'phrase') {
-    const m = structuredDate.originalText.match(/(?<!\d)(-?\d{4})(?!\d)/);
-    if (m) return parseInt(m[1], 10);
-  }
-
-  return null;
-}
-
 function formatCanvasGregorianYear(year: number | null): string {
   if (year === null) return '';
   return year < 0 ? `前${Math.abs(year)}` : String(year);
@@ -304,62 +263,6 @@ export function formatPersonGregorianLifespan(
   if (birthStr) return isDeceased ? `${birthStr} - 歿` : `${birthStr} - 存`;
   if (deathStr) return `卒 ${deathStr}`;
   return isDeceased ? '歿' : '存';
-}
-
-export function extractYearDisplay(
-  structuredDate?: GenealogyDate | null
-): string {
-  const gy = extractGregorianYear(structuredDate);
-  if (gy !== null) return String(gy);
-
-  if (structuredDate) {
-    if (structuredDate.kind === 'date' && structuredDate.calendar === 'regnal') {
-      const p = structuredDate.parts as {
-        eraName?: string;
-        yearInEra?: number;
-      };
-      if (p.eraName) {
-        return `${p.eraName}${p.yearInEra === 1 ? '元' : p.yearInEra || ''}年`;
-      }
-    }
-    if (structuredDate.kind === 'date' && structuredDate.calendar === 'sexagenary') {
-      const p = structuredDate.parts as { cycleYear?: string };
-      if (p.cycleYear) {
-        return `${p.cycleYear}年`;
-      }
-    }
-    const formatted = formatGenealogyDate(structuredDate).trim();
-    if (formatted) return formatted;
-  }
-
-  return '';
-}
-
-export function extractYearLabel(
-  structuredDate?: GenealogyDate | null
-): string {
-  if (!structuredDate) return '';
-  if (structuredDate.kind === 'date') {
-    if (
-      structuredDate.calendar === 'gregorian' ||
-      structuredDate.calendar === 'chinese_lunisolar'
-    ) {
-      const parts = structuredDate.parts as { year?: number };
-      if (typeof parts.year === 'number' && Number.isFinite(parts.year)) {
-        return String(parts.year);
-      }
-    }
-    if (structuredDate.calendar === 'regnal') {
-      const p = structuredDate.parts as {
-        eraName?: string;
-        yearInEra?: number;
-      };
-      if (p.eraName) {
-        return `${p.eraName}${p.yearInEra === 1 ? '元' : p.yearInEra || ''}年`;
-      }
-    }
-  }
-  return extractYearDisplay(structuredDate);
 }
 
 export function calculateAgeDisplay(
@@ -503,6 +406,7 @@ export function buildImmediateFamilyGroups(
   allPersons: PersonRecord[],
   clanSurname: string = ''
 ): ImmediateFamilyGroups {
+  const graph = getLineageGraph(allPersons);
   const upperGroup: FamilyMemberRow[] = [];
   const lowerGroup: FamilyMemberRow[] = [];
 
@@ -510,7 +414,7 @@ export function buildImmediateFamilyGroups(
 
   if (!isSpouseNode) {
     const father = person.fatherId
-      ? allPersons.find((p) => p.id === person.fatherId) || null
+      ? graph.personById.get(person.fatherId) || null
       : null;
 
     if (father) {
@@ -524,10 +428,10 @@ export function buildImmediateFamilyGroups(
         yearsLabel: formatPersonYearsSummary(father),
       });
 
-      const fatherSpouses = getDerivedSpouses(allPersons, father.id);
+      const fatherSpouses = graph.spousesByPartnerId.get(father.id) || [];
       const matchedMother = person.motherId
         ? fatherSpouses.find((m) => m.id === person.motherId) ||
-          allPersons.find((m) => m.id === person.motherId)
+          graph.personById.get(person.motherId)
         : fatherSpouses[0];
 
       if (matchedMother) {
@@ -542,7 +446,7 @@ export function buildImmediateFamilyGroups(
         });
       }
 
-      const siblings = getDerivedChildren(allPersons, father.id).filter(
+      const siblings = (graph.childrenByAnyParentId.get(father.id) || []).filter(
         (sib) => sib.id !== person.id
       );
       siblings.forEach((sib) => {
@@ -557,7 +461,7 @@ export function buildImmediateFamilyGroups(
         });
       });
     } else if (person.motherId) {
-      const mother = allPersons.find((p) => p.id === person.motherId);
+      const mother = graph.personById.get(person.motherId);
       if (mother) {
         upperGroup.push({
           key: `mother-${mother.id}`,
@@ -573,7 +477,9 @@ export function buildImmediateFamilyGroups(
   }
 
   if (isSpouseNode) {
-    const primary = allPersons.find((p) => p.id === person.spouseOfId);
+    const primary = person.spouseOfId
+      ? graph.personById.get(person.spouseOfId)
+      : undefined;
     if (primary) {
       lowerGroup.push({
         key: `partner-${primary.id}`,
@@ -585,13 +491,13 @@ export function buildImmediateFamilyGroups(
         yearsLabel: formatPersonYearsSummary(primary),
       });
 
-      const primarySpouses = getDerivedSpouses(allPersons, primary.id);
-      const children = getDerivedChildren(allPersons, primary.id).filter(
-        (child) => {
-          if (child.motherId) return child.motherId === person.id;
-          return primarySpouses[0]?.id === person.id;
-        }
-      );
+      const primarySpouses = graph.spousesByPartnerId.get(primary.id) || [];
+      const children = (
+        graph.childrenByAnyParentId.get(primary.id) || []
+      ).filter((child) => {
+        if (child.motherId) return child.motherId === person.id;
+        return primarySpouses[0]?.id === person.id;
+      });
 
       children.forEach((child) => {
         lowerGroup.push({
@@ -606,7 +512,7 @@ export function buildImmediateFamilyGroups(
       });
     }
   } else {
-    const spouseNodes = getDerivedSpouses(allPersons, person.id);
+    const spouseNodes = graph.spousesByPartnerId.get(person.id) || [];
     spouseNodes.forEach((sp) => {
       const disp = resolvePersonDisplayName(sp, clanSurname);
       const baseRole =
@@ -626,7 +532,7 @@ export function buildImmediateFamilyGroups(
       });
     });
 
-    const children = getDerivedChildren(allPersons, person.id);
+    const children = graph.childrenByAnyParentId.get(person.id) || [];
     children.forEach((child) => {
       lowerGroup.push({
         key: `child-${child.id}`,
@@ -652,6 +558,7 @@ export function buildPersonTimelineEvents(
   allPersons: PersonRecord[],
   clanSurname: string = ''
 ): PersonTimelineEvent[] {
+  const graph = getLineageGraph(allPersons);
   const events: PersonTimelineEvent[] = [];
   const birthYear = extractGregorianYear(person.birth?.structuredDate);
 
@@ -692,47 +599,21 @@ export function buildPersonTimelineEvents(
   const customEvents = person.events || [];
   const consumedMarriageEventIds = new Set<string>();
 
-  const findMatchedMarriageEvent = (
-    partnerId: string,
-    partnerGivenName: string,
-    partnerDisplayName: string,
-    spouseCount: number
-  ): PersonLifeEvent | undefined => {
-    const marriageEvents = customEvents.filter(
-      (ce) => normalizeEventType(ce.type) === 'marriage' && !consumedMarriageEventIds.has(ce.id)
-    );
-    if (marriageEvents.length === 0) return undefined;
-
-    const byDeterministicId = marriageEvents.find(
-      (ce) => ce.id === `ev-marriage-${partnerId}` || ce.id === `ev-marriage-partner-${partnerId}`
-    );
-    if (byDeterministicId) return byDeterministicId;
-
-    const byDesc = marriageEvents.find((ce) => {
-      const desc = ce.description?.trim() || '';
-      return (
-        (partnerDisplayName && desc.includes(partnerDisplayName)) ||
-        (partnerGivenName && desc.includes(partnerGivenName))
-      );
-    });
-    if (byDesc) return byDesc;
-
-    if (spouseCount === 1 && marriageEvents.length === 1) {
-      return marriageEvents[0];
-    }
-    return undefined;
-  };
-
   const isSpouseNode = Boolean(person.spouseOfId);
   if (isSpouseNode) {
-    const partner = allPersons.find((p) => p.id === person.spouseOfId);
+    const partner = person.spouseOfId
+      ? graph.personById.get(person.spouseOfId)
+      : undefined;
     if (partner) {
       const partnerName = resolvePersonDisplayName(partner, clanSurname);
-      const matchedEv = findMatchedMarriageEvent(
+      const matchedEv = matchMarriageEventOnRecord(
+        customEvents.filter((ce) => !consumedMarriageEventIds.has(ce.id)),
         partner.id,
         partner.name,
         partnerName,
-        1
+        1,
+        partner.id,
+        person.id
       );
       if (matchedEv) consumedMarriageEventIds.add(matchedEv.id);
       const mDateText = matchedEv?.structuredDate
@@ -747,7 +628,8 @@ export function buildPersonTimelineEvents(
         id: `tl-marriage-${partner.id}`,
         eventType: 'marriage',
         sourceKind: 'marriage_node',
-        sourceId: matchedEv?.id || `ev-marriage-${partner.id}`,
+        sourceId:
+          matchedEv?.id || buildCoupleMarriageEventId(partner.id, person.id),
         targetPersonId: person.id,
         sortYear: mYear ?? (birthYear !== null ? birthYear + 24 : 90200),
         sortOrder: 40,
@@ -774,14 +656,17 @@ export function buildPersonTimelineEvents(
       });
     }
   } else {
-    const spouseNodes = getDerivedSpouses(allPersons, person.id);
+    const spouseNodes = graph.spousesByPartnerId.get(person.id) || [];
     spouseNodes.forEach((sp, idx) => {
       const name = resolvePersonDisplayName(sp, clanSurname);
-      const matchedEv = findMatchedMarriageEvent(
+      const matchedEv = matchMarriageEventOnRecord(
+        customEvents.filter((ce) => !consumedMarriageEventIds.has(ce.id)),
         sp.id,
         sp.name,
         name,
-        spouseNodes.length
+        spouseNodes.length,
+        person.id,
+        sp.id
       );
       if (matchedEv) consumedMarriageEventIds.add(matchedEv.id);
       const mDateText = matchedEv?.structuredDate
@@ -796,7 +681,8 @@ export function buildPersonTimelineEvents(
         id: `tl-marriage-${sp.id}`,
         eventType: 'marriage',
         sourceKind: 'marriage_node',
-        sourceId: matchedEv?.id || `ev-marriage-${sp.id}`,
+        sourceId:
+          matchedEv?.id || buildCoupleMarriageEventId(person.id, sp.id),
         targetPersonId: person.id,
         sortYear:
           mYear ?? (birthYear !== null ? birthYear + 25 + idx : 90200 + idx),
@@ -827,13 +713,16 @@ export function buildPersonTimelineEvents(
 
   // 3. Children Births
   const primaryId = person.spouseOfId || person.id;
-  const derivedChildren = getDerivedChildren(allPersons, primaryId).filter(
-    (child) => {
-      if (!isSpouseNode) return true;
-      if (child.motherId) return child.motherId === person.id;
-      return getDerivedSpouses(allPersons, primaryId)[0]?.id === person.id;
-    }
-  );
+  const primarySpouses = isSpouseNode
+    ? graph.spousesByPartnerId.get(primaryId) || []
+    : [];
+  const derivedChildren = (
+    graph.childrenByAnyParentId.get(primaryId) || []
+  ).filter((child) => {
+    if (!isSpouseNode) return true;
+    if (child.motherId) return child.motherId === person.id;
+    return primarySpouses[0]?.id === person.id;
+  });
 
   derivedChildren.forEach((child, idx) => {
     const cDateText = getPersonDateDisplay(child, 'birth').trim();
@@ -1144,6 +1033,56 @@ export function applyUnifiedEventToPerson(
     },
     allPersons
   );
+}
+
+/**
+ * Atomically synchronize a couple's shared marriage event across both partners in one pass,
+ * preserving legacy event IDs when present and defaulting to deterministic couple event IDs.
+ */
+export function applyCoupleMarriageEvent(
+  allPersons: PersonRecord[],
+  coupleMeta: NonNullable<EventEditContext['coupleMeta']>,
+  payload: UnifiedEventSubmitPayload,
+  context: EventEditContext
+): PersonRecord[] {
+  const { personById } = getLineageGraph(allPersons);
+  const partner = personById.get(coupleMeta.partnerId);
+  const spouse = personById.get(coupleMeta.spouseId);
+  if (!partner && !spouse) return allPersons;
+
+  const canonicalCoupleId = buildCoupleMarriageEventId(
+    coupleMeta.partnerId,
+    coupleMeta.spouseId
+  );
+
+  const patches = new Map<string, Partial<PersonRecord>>();
+  if (partner) {
+    patches.set(
+      partner.id,
+      applyUnifiedEventToPerson(partner, allPersons, payload, {
+        ...context,
+        mode: 'edit',
+        sourceId: coupleMeta.partnerEventId || canonicalCoupleId,
+        targetPersonId: partner.id,
+      })
+    );
+  }
+  if (spouse) {
+    patches.set(
+      spouse.id,
+      applyUnifiedEventToPerson(spouse, allPersons, payload, {
+        ...context,
+        mode: 'edit',
+        sourceId: coupleMeta.spouseEventId || canonicalCoupleId,
+        targetPersonId: spouse.id,
+      })
+    );
+  }
+
+  return allPersons.map((p) => {
+    const patch = patches.get(p.id);
+    return patch ? { ...p, ...patch } : p;
+  });
 }
 
 /**

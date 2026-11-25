@@ -44,6 +44,7 @@ const ArticlesPage: React.FC = () => {
     ArticleStatus | 'all'
   >('all');
 
+  const articleHydrated = useArticleStore((s) => s._hasHydrated);
   const articleTreesByProject = useArticleStore((s) => s.treesByProject);
   const selectedArticleNodeIdByProject = useArticleStore(
     (s) => s.selectedNodeIdByProject
@@ -67,7 +68,7 @@ const ArticlesPage: React.FC = () => {
     projects[0];
 
   useEffect(() => {
-    if (!activeProjectId) return;
+    if (!activeProjectId || !articleHydrated) return;
     ensureArticleInitialized(activeProjectId, {
       familyName: activeProject?.name,
       surname: surnameOf(activeProject) || undefined,
@@ -77,6 +78,7 @@ const ArticlesPage: React.FC = () => {
     });
   }, [
     activeProjectId,
+    articleHydrated,
     activeProject?.name,
     activeProject?.surname,
     activeProject?.hallName,

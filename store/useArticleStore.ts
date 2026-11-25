@@ -11,6 +11,7 @@ import {
   updateTreeNodeData,
 } from '../lib/treeOps';
 import { createAsyncEntityStorage } from './storageAdapter';
+import { shouldInitializeProjectSeed } from './hydrationGate';
 import {
   createInitialArticleSeed,
   findFirstArticleId,
@@ -47,6 +48,8 @@ export interface ArticleConflictState {
 }
 
 interface ArticleState {
+  _hasHydrated: boolean;
+  _setHasHydrated: (hydrated: boolean) => void;
   treesByProject: Record<string, TreeItem[]>;
   selectedNodeIdByProject: Record<string, string>;
   articlesByKey: Record<string, ArticleDocument>;
@@ -138,6 +141,8 @@ function applyArticleRowToState(
 export const useArticleStore = create<ArticleState>()(
   persist(
     (set, get) => ({
+      _hasHydrated: false,
+      _setHasHydrated: (hydrated) => set({ _hasHydrated: hydrated }),
       treesByProject: {},
       selectedNodeIdByProject: {},
       articlesByKey: {},
@@ -145,7 +150,16 @@ export const useArticleStore = create<ArticleState>()(
       articleConflict: null,
 
       ensureProjectInitialized: (projectId, ctx) => {
-        if (!projectId || get().treesByProject[projectId] !== undefined) return;
+        const current = get();
+        if (
+          !shouldInitializeProjectSeed({
+            hasHydrated: current._hasHydrated,
+            projectId,
+            existingEntry: current.treesByProject[projectId],
+          })
+        ) {
+          return;
+        }
         const seed = createInitialArticleSeed(projectId, ctx);
         set((state) => {
           if (state.treesByProject[projectId] !== undefined) return state;
@@ -574,6 +588,12 @@ export const useArticleStore = create<ArticleState>()(
       name: 'yunpu:articles',
       version: 3,
       storage: createAsyncEntityStorage(),
+      partialize: (state) => ({
+        treesByProject: state.treesByProject,
+        selectedNodeIdByProject: state.selectedNodeIdByProject,
+        articlesByKey: state.articlesByKey,
+        revisionsByArticleId: state.revisionsByArticleId,
+      }),
       migrate: (persisted, version) => {
         let state =
           version < 2
@@ -583,6 +603,9 @@ export const useArticleStore = create<ArticleState>()(
           state = migrateArticlesV2ToV3(state);
         }
         return state;
+      },
+      onRehydrateStorage: () => (state) => {
+        state?._setHasHydrated(true);
       },
     }
   )

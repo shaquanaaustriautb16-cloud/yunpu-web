@@ -28,12 +28,6 @@ import {
   extractArticleMetrics,
   readingTimeLabel,
 } from '../domain/articleMetrics';
-import { Packer } from 'docx';
-import {
-  importDocxArrayBuffer,
-  sanitizeArticleFileName,
-  tiptapJsonToDocx,
-} from '../domain/docxCodec';
 import { createIndexedDbArticleAssetStore } from '../assets/articleAssetStore';
 
 interface WordArticleEditorProps {
@@ -290,6 +284,8 @@ export const WordArticleEditor: React.FC<WordArticleEditorProps> = ({
         editor?.getJSON() ??
         article.contentJson ??
         htmlToContentJson(article.contentHtml || '<p></p>');
+      const [{ Packer }, { sanitizeArticleFileName, tiptapJsonToDocx }] =
+        await Promise.all([import('docx'), import('../domain/docxCodec')]);
       const doc = tiptapJsonToDocx(
         {
           title: article.title,
@@ -322,6 +318,7 @@ export const WordArticleEditor: React.FC<WordArticleEditorProps> = ({
   const handleImportWord = async (file: File) => {
     try {
       const arrayBuffer = await file.arrayBuffer();
+      const { importDocxArrayBuffer } = await import('../domain/docxCodec');
       const { contentJson, images } = await importDocxArrayBuffer(arrayBuffer);
       const assetStore = createIndexedDbArticleAssetStore();
       await Promise.all(images.map((img) => assetStore.put(img)));

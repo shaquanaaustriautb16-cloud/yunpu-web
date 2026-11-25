@@ -16,7 +16,7 @@ import {
 import { useWorkspaceStore } from '../../../store/useWorkspaceStore';
 import { useProjectId } from '../../../hooks/useProjectId';
 import type { PersonRecord } from '../../lineage/types';
-import { buildLineageGraph } from '../../lineage/domain/lineageGraph';
+import { getLineageGraph } from '../../lineage/domain/lineageGraph';
 import {
   computeAutoRankLabel,
   formatPersonAliases,
@@ -105,7 +105,7 @@ export const LineageQuickPanel: React.FC<LineageQuickPanelProps> = ({
   );
   const [collapsedIds, setCollapsedIds] = useState<Record<string, boolean>>({});
 
-  const graphIndex = useMemo(() => buildLineageGraph(persons), [persons]);
+  const graphIndex = useMemo(() => getLineageGraph(persons), [persons]);
   const personMap = graphIndex.personById;
   const childrenMap = graphIndex.childrenByFatherId;
 

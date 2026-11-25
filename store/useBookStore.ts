@@ -6,6 +6,7 @@ import {
   findFirstTreeNodeByType,
 } from '../lib/treeOps';
 import { createAsyncEntityStorage } from './storageAdapter';
+import { shouldInitializeProjectSeed } from './hydrationGate';
 import {
   compileBookEdition,
   formatTimestampNow,
@@ -132,6 +133,8 @@ function reorderInList<T extends { id: string }>(
 }
 
 interface BookState {
+  _hasHydrated: boolean;
+  _setHasHydrated: (hydrated: boolean) => void;
   booksByProject: Record<string, BookRecord[]>;
   selectedBookIdByProject: Record<string, string>;
   activeStepByBook: Record<string, BookStep>;
@@ -263,12 +266,23 @@ function updateBookInProject(
 export const useBookStore = create<BookState>()(
   persist(
     (set, get) => ({
+      _hasHydrated: false,
+      _setHasHydrated: (hydrated) => set({ _hasHydrated: hydrated }),
       booksByProject: {},
       selectedBookIdByProject: {},
       activeStepByBook: {},
 
       ensureProjectInitialized: (projectId, ctx) => {
-        if (!projectId || get().booksByProject[projectId] !== undefined) return;
+        const current = get();
+        if (
+          !shouldInitializeProjectSeed({
+            hasHydrated: current._hasHydrated,
+            projectId,
+            existingEntry: current.booksByProject[projectId],
+          })
+        ) {
+          return;
+        }
 
         const cleanFamily = ctx.familyName?.trim() || '本族';
         const surname = ctx.surname?.trim() || '';
@@ -881,6 +895,14 @@ export const useBookStore = create<BookState>()(
       name: 'yunpu:books',
       version: 1,
       storage: createAsyncEntityStorage(),
+      partialize: (state) => ({
+        booksByProject: state.booksByProject,
+        selectedBookIdByProject: state.selectedBookIdByProject,
+        activeStepByBook: state.activeStepByBook,
+      }),
+      onRehydrateStorage: () => (state) => {
+        state?._setHasHydrated(true);
+      },
     }
   )
 );

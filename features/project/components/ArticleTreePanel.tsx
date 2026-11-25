@@ -33,6 +33,7 @@ export const ArticleTreePanel: React.FC = () => {
     projects.find((p) => p.organizationId === activeWorkspaceId) ||
     projects[0];
 
+  const articleHydrated = useArticleStore((s) => s._hasHydrated);
   const treesByProject = useArticleStore((s) => s.treesByProject);
   const selectedNodeIdByProject = useArticleStore(
     (s) => s.selectedNodeIdByProject
@@ -56,7 +57,7 @@ export const ArticleTreePanel: React.FC = () => {
   });
 
   useEffect(() => {
-    if (!activeProjectId) return;
+    if (!activeProjectId || !articleHydrated) return;
     ensureProjectInitialized(activeProjectId, {
       familyName: activeProject?.name,
       surname: surnameOf(activeProject) || undefined,
@@ -66,6 +67,7 @@ export const ArticleTreePanel: React.FC = () => {
     });
   }, [
     activeProjectId,
+    articleHydrated,
     activeProject?.name,
     activeProject?.surname,
     activeProject?.hallName,

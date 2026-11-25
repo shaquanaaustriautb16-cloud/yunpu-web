@@ -64,15 +64,18 @@ export const BookWorkspace: React.FC = () => {
   const projects = useWorkspaceStore((s) => s.projects);
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
+  const articleHydrated = useArticleStore((s) => s._hasHydrated);
   const articleTreesByProject = useArticleStore((s) => s.treesByProject);
   const articlesByKey = useArticleStore((s) => s.articlesByKey);
   const ensureArticleInitialized = useArticleStore(
     (s) => s.ensureProjectInitialized
   );
 
+  const lineageHydrated = useLineageStore((s) => s._hasHydrated);
   const lineageTreesByProject = useLineageStore((s) => s.treesByProject);
   const personsByChart = useLineageStore((s) => s.personsByChart);
 
+  const bookHydrated = useBookStore((s) => s._hasHydrated);
   const booksByProject = useBookStore((s) => s.booksByProject);
   const selectedBookIdByProject = useBookStore(
     (s) => s.selectedBookIdByProject
@@ -90,7 +93,9 @@ export const BookWorkspace: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   useEffect(() => {
-    if (!activeProjectId) return;
+    if (!activeProjectId || !articleHydrated || !bookHydrated || !lineageHydrated) {
+      return;
+    }
     if (!articleTreesByProject[activeProjectId]) {
       ensureArticleInitialized(activeProjectId, {
         familyName: activeProject?.name,
@@ -119,6 +124,9 @@ export const BookWorkspace: React.FC = () => {
     });
   }, [
     activeProjectId,
+    articleHydrated,
+    bookHydrated,
+    lineageHydrated,
     activeProject?.name,
     activeProject?.surname,
     activeProject?.hallName,

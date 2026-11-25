@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test"
+    "test": "tsx --test $(find . -name '*.test.ts' -not -path './node_modules/*')"
   },
   "dependencies": {
     "@dnd-kit/core": "6.1.0",

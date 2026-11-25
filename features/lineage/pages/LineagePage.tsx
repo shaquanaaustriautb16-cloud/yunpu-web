@@ -345,6 +345,9 @@ const LineagePage: React.FC = () => {
                 clanSurname={effectiveSurname}
                 onSelectPerson={handleSelectPerson}
                 onUpdatePerson={handleUpdatePerson}
+                onCommitPersons={(nextPersons) =>
+                  commitChartPersons(activeProjectId, chartId, nextPersons)
+                }
                 onDeletePerson={handleDeletePerson}
                 onAddChild={handleOpenAddChild}
                 onAddSpouse={handleOpenAddSpouse}

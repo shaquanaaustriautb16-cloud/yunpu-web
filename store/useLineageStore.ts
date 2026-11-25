@@ -78,6 +78,8 @@ export interface LineageChartMeta {
 }
 
 export interface LineageState {
+  _hasHydrated: boolean;
+  _setHasHydrated: (hydrated: boolean) => void;
   treesByProject: Record<string, TreeItem[]>;
   selectedNodeIdByProject: Record<string, string>;
   personsByChart: Record<string, PersonRecord[]>;
@@ -185,6 +187,8 @@ function getOrSeedChartPersons(
 export const useLineageStore = create<LineageState>()(
   persist(
     (set, get) => ({
+      _hasHydrated: false,
+      _setHasHydrated: (hydrated) => set({ _hasHydrated: hydrated }),
       treesByProject: {},
       selectedNodeIdByProject: {},
       personsByChart: {},
@@ -616,6 +620,9 @@ export const useLineageStore = create<LineageState>()(
         personsByChart: state.personsByChart,
         viewModeByProject: state.viewModeByProject,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?._setHasHydrated(true);
+      },
     }
   )
 );

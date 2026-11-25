@@ -7,7 +7,7 @@ import {
   makeArticleStorageKey,
 } from '../articles/articleData';
 import { contentJsonToOutputHtml } from '../articles/domain/htmlProjection';
-import { buildLineageGraph } from '../lineage/domain/lineageGraph';
+import { getLineageGraph } from '../lineage/domain/lineageGraph';
 import { buildPersonSummary } from '../lineage/domain/personSummary';
 import { createSeedPersonsForChart } from '../lineage/lineageData';
 import type { PersonRecord } from '../lineage/types';
@@ -120,7 +120,7 @@ export function sliceLineagePersons(
   if (!startPerson) return [];
 
   const startGen = startPerson.generation || 1;
-  const { childrenByFatherId: childrenByParent } = buildLineageGraph(allPersons);
+  const { childrenByFatherId: childrenByParent } = getLineageGraph(allPersons);
 
   const result: PersonRecord[] = [];
   const visited = new Set<string>();
@@ -385,7 +385,7 @@ export function compileBookEdition(params: CompileBookParams): BookEdition {
     const sliced = sliceLineagePersons(chartPersons, leaf);
     sliced.forEach((p) => uniqueMemberIds.add(p.id));
 
-    const chartIndex = buildLineageGraph(chartPersons);
+    const chartIndex = getLineageGraph(chartPersons);
     const childrenMap = new Map<string, string[]>();
     for (const p of sliced) {
       const parentId = p.fatherId || p.motherId;

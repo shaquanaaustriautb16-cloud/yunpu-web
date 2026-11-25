@@ -211,6 +211,7 @@ export const AddTextModal: React.FC<AddTextModalProps> = ({
   const activeProjectId = useProjectId();
   const projects = useWorkspaceStore((s) => s.projects);
   const activeProject = projects.find((p) => p.id === activeProjectId);
+  const articleHydrated = useArticleStore((s) => s._hasHydrated);
   const articleTreesByProject = useArticleStore((s) => s.treesByProject);
   const articlesByKey = useArticleStore((s) => s.articlesByKey);
   const ensureInitialized = useArticleStore((s) => s.ensureProjectInitialized);
@@ -222,7 +223,7 @@ export const AddTextModal: React.FC<AddTextModalProps> = ({
     if (!open || !activeProjectId) return;
     setSearch('');
     setQueue([]);
-    if (!articleTreesByProject[activeProjectId]) {
+    if (articleHydrated && !articleTreesByProject[activeProjectId]) {
       ensureInitialized(activeProjectId, {
         familyName: activeProject?.name,
         surname: surnameOf(activeProject) || undefined,
@@ -234,6 +235,7 @@ export const AddTextModal: React.FC<AddTextModalProps> = ({
   }, [
     open,
     activeProjectId,
+    articleHydrated,
     articleTreesByProject,
     activeProject?.name,
     activeProject?.surname,

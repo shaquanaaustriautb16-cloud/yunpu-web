@@ -6,7 +6,9 @@ import { useArticleStore } from '../../../store/useArticleStore';
 import { useAuthStore } from '../../auth/useAuthStore';
 import { diffArticleParagraphs } from '../domain/articleDiff';
 import type { ArticleBlockDiff } from '../domain/articleDiff';
-import type { ArticleDocument } from '../types';
+import type { ArticleDocument, ArticleRevision } from '../types';
+
+const EMPTY_REVISIONS: ArticleRevision[] = [];
 
 export interface ArticleRevisionModalProps {
   open: boolean;
@@ -24,7 +26,7 @@ export const ArticleRevisionModal: React.FC<ArticleRevisionModalProps> = ({
   onFlushPendingSave,
 }) => {
   const revisions = useArticleStore(
-    (s) => s.revisionsByArticleId[article.id] ?? [],
+    (s) => s.revisionsByArticleId[article.id] ?? EMPTY_REVISIONS,
   );
   const restoreRevision = useArticleStore((s) => s.restoreRevision);
 

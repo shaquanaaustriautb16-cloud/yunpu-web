@@ -5,7 +5,10 @@ export type ApiModeEnv = {
   VITE_API_PROXY_TARGET?: string;
 };
 
-export function resolveApiMode(env: ApiModeEnv | ImportMetaEnv): ApiMode {
+export function resolveApiMode(
+  env?: ApiModeEnv | ImportMetaEnv | null,
+): ApiMode {
+  if (!env) return 'direct-mock';
   if (env.VITE_ENABLE_MOCK === '0') return 'network';
   if (env.VITE_API_PROXY_TARGET) return 'network';
   return 'direct-mock';

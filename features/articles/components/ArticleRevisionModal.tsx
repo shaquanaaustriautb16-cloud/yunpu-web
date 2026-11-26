@@ -3,7 +3,9 @@ import { History, RotateCcw, X } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { ModalShell } from '../../../components/ui/modal';
 import { useArticleStore } from '../../../store/useArticleStore';
+import { useArticleRevisionStore } from '../../../store/useArticleRevisionStore';
 import { useAuthStore } from '../../auth/useAuthStore';
+import { makeArticleStorageKey } from '../articleData';
 import { diffArticleParagraphs } from '../domain/articleDiff';
 import type { ArticleBlockDiff } from '../domain/articleDiff';
 import type { ArticleDocument, ArticleRevision } from '../types';
@@ -25,8 +27,9 @@ export const ArticleRevisionModal: React.FC<ArticleRevisionModalProps> = ({
   article,
   onFlushPendingSave,
 }) => {
-  const revisions = useArticleStore(
-    (s) => s.revisionsByArticleId[article.id] ?? EMPTY_REVISIONS,
+  const scopedKey = makeArticleStorageKey(projectId, article.id);
+  const revisions = useArticleRevisionStore(
+    (s) => s.revisionsByKey[scopedKey] ?? s.revisionsByKey[article.id] ?? EMPTY_REVISIONS,
   );
   const restoreRevision = useArticleStore((s) => s.restoreRevision);
 

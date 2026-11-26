@@ -3,16 +3,13 @@ import { FileText, Folder, FolderOpen, FolderPlus, Plus } from 'lucide-react';
 import { Tree } from '../../../components/common/Tree/Tree';
 import type { FlattenedItem } from '../../../components/common/Tree/types';
 import { findItemDeep } from '../../../components/common/Tree/utilities';
-import { useProjectId } from '../../../hooks/useProjectId';
-import { useWorkspaceStore } from '../../../store/useWorkspaceStore';
+import { useActiveProject } from '../../../hooks/useActiveProject';
 import { useArticleStore } from '../../../store/useArticleStore';
 import {
   findFirstArticleId,
   makeArticleStorageKey,
 } from '../../articles/articleData';
 import type { ArticleMetaInput } from '../../articles/types';
-import { parsePlaceText } from '../../place-input';
-import { surnameOf } from '../../dashboard/projectView';
 import { ArticleMetaModal } from '../../articles/components/ArticleMetaModal';
 
 interface ArticleModalState {
@@ -24,14 +21,11 @@ interface ArticleModalState {
 }
 
 export const ArticleTreePanel: React.FC = () => {
-  const activeProjectId = useProjectId();
-
-  const projects = useWorkspaceStore((s) => s.projects);
-  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
-  const activeProject =
-    projects.find((p) => p.id === activeProjectId) ||
-    projects.find((p) => p.organizationId === activeWorkspaceId) ||
-    projects[0];
+  const {
+    projectId: activeProjectId,
+    project: activeProject,
+    articleSeedContext,
+  } = useActiveProject();
 
   const articleHydrated = useArticleStore((s) => s._hasHydrated);
   const treesByProject = useArticleStore((s) => s.treesByProject);
@@ -58,21 +52,11 @@ export const ArticleTreePanel: React.FC = () => {
 
   useEffect(() => {
     if (!activeProjectId || !articleHydrated) return;
-    ensureProjectInitialized(activeProjectId, {
-      familyName: activeProject?.name,
-      surname: surnameOf(activeProject) || undefined,
-      hallName: activeProject?.hallName ?? undefined,
-      ancestor: activeProject?.ancestor ?? undefined,
-      region: parsePlaceText(activeProject?.originText ?? undefined),
-    });
+    ensureProjectInitialized(activeProjectId, articleSeedContext);
   }, [
     activeProjectId,
     articleHydrated,
-    activeProject?.name,
-    activeProject?.surname,
-    activeProject?.hallName,
-    activeProject?.ancestor,
-    activeProject?.originText,
+    articleSeedContext,
     ensureProjectInitialized,
   ]);
 

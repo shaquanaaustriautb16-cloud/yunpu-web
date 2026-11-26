@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createEntityId } from '../../../lib/id';
 import { readGenealogyDate } from '../../date-input';
 import { readGenealogyPlace } from '../../place-input';
 import {
@@ -328,7 +329,7 @@ export function usePersonDetailController({
     setAliasEditContext({
       mode: 'create',
       initialAlias: {
-        id: `alias-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+        id: createEntityId('alias'),
         type: '',
         surname: '',
         name: '',

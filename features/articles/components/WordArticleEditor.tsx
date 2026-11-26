@@ -87,10 +87,12 @@ export const WordArticleEditor: React.FC<WordArticleEditorProps> = ({
   const onUpdateRef = useRef(onUpdateArticle);
   onUpdateRef.current = onUpdateArticle;
 
+  const activeProjectId = useProjectId();
+  const activeScopeKey = `${activeProjectId || ''}::${article.id}`;
+  const activeScopeKeyRef = useRef(activeScopeKey);
   const activeArticleIdRef = useRef(article.id);
   const isSyncingContentRef = useRef(false);
 
-  const activeProjectId = useProjectId();
   const personsByChart = useLineageStore((s) => s.personsByChart);
   const updateArticleContent = useArticleStore((s) => s.updateArticleContent);
   const activeProjectIdRef = useRef(activeProjectId);
@@ -129,7 +131,7 @@ export const WordArticleEditor: React.FC<WordArticleEditorProps> = ({
       cancel: (handle) => window.clearTimeout(handle),
       projectHtml: contentJsonToHtml,
       onCommit: (commit) => {
-        const projectId = activeProjectIdRef.current;
+        const projectId = commit.projectId ?? activeProjectIdRef.current;
         if (!projectId) return;
         updateArticleContentRef.current(projectId, commit.articleId, {
           contentJson: commit.contentJson,
@@ -153,8 +155,10 @@ export const WordArticleEditor: React.FC<WordArticleEditorProps> = ({
     onUpdate: ({ editor: ed }) => {
       if (isSyncingContentRef.current) return;
       setSaveState('saving');
-      saveQueueRef.current?.noteEdit(activeArticleIdRef.current, () =>
-        ed.getJSON()
+      saveQueueRef.current?.noteEdit(
+        activeArticleIdRef.current,
+        () => ed.getJSON(),
+        activeProjectIdRef.current,
       );
     },
     onSelectionUpdate: () => {
@@ -171,12 +175,13 @@ export const WordArticleEditor: React.FC<WordArticleEditorProps> = ({
     saveQueueRef.current?.flush();
   }, []);
 
-  // Switch document content cleanly when user selects a different article in the sidebar
+  // Switch document content cleanly when user switches article OR project
   useLayoutEffect(() => {
     if (!editor) return;
-    if (activeArticleIdRef.current !== article.id) {
+    if (activeScopeKeyRef.current !== activeScopeKey) {
       saveQueueRef.current?.flush();
       activeArticleIdRef.current = article.id;
+      activeScopeKeyRef.current = activeScopeKey;
       isSyncingContentRef.current = true;
       const content: ArticleDocument['contentJson'] | string =
         article.contentJson ?? (article.contentHtml || '<p></p>');
@@ -184,12 +189,12 @@ export const WordArticleEditor: React.FC<WordArticleEditorProps> = ({
       isSyncingContentRef.current = false;
       setSaveState('saved');
     }
-  }, [article.id, article.contentHtml, article.contentJson, editor]);
+  }, [activeScopeKey, article.id, article.contentHtml, article.contentJson, editor]);
 
   // Reload editor when store content changes externally (e.g. revision restore) without switching article
   useEffect(() => {
     if (!editor) return;
-    if (activeArticleIdRef.current !== article.id) return;
+    if (activeScopeKeyRef.current !== activeScopeKey) return;
     if (!article.contentJson) return;
     if (saveQueueRef.current?.hasPending()) return;
 
@@ -200,17 +205,17 @@ export const WordArticleEditor: React.FC<WordArticleEditorProps> = ({
     editor.commands.setContent(article.contentJson, false);
     isSyncingContentRef.current = false;
     setSaveState('saved');
-  }, [article.contentJson, article.id, editor]);
+  }, [activeScopeKey, article.contentJson, editor]);
 
   // Lazily persist contentJson from HTML as soon as the editor is ready (first open or after switch)
   useEffect(() => {
     if (!editor) return;
-    if (activeArticleIdRef.current !== article.id) return;
+    if (activeScopeKeyRef.current !== activeScopeKey) return;
     if (article.contentJson) return;
 
     const contentJson = htmlToContentJson(article.contentHtml || '<p></p>');
     onUpdateRef.current({ contentJson });
-  }, [editor, article.id, article.contentHtml, article.contentJson]);
+  }, [editor, activeScopeKey, article.contentHtml, article.contentJson]);
 
   // Keep editable flag synced with preview mode
   useEffect(() => {

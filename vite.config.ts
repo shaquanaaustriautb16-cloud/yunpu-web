@@ -1,10 +1,13 @@
 import path from 'path';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { buildApiProxyConfig, resolveProxyTarget } from './lib/apiMode';
 
-export default defineConfig(() => {
-  const apiProxyTarget = process.env.VITE_API_PROXY_TARGET;
+export default defineConfig(({ mode }) => {
+  const fileEnv = loadEnv(mode, process.cwd(), '');
+  const apiProxyTarget = resolveProxyTarget(process.env, fileEnv);
+  const proxy = buildApiProxyConfig(apiProxyTarget);
 
   return {
     server: {
@@ -13,16 +16,7 @@ export default defineConfig(() => {
       allowedHosts: true as const,
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
-      ...(apiProxyTarget
-        ? {
-            proxy: {
-              '/api': {
-                target: apiProxyTarget,
-                changeOrigin: true,
-              },
-            },
-          }
-        : {}),
+      ...(proxy ? { proxy } : {}),
     },
     plugins: [react(), tailwindcss()],
     resolve: {

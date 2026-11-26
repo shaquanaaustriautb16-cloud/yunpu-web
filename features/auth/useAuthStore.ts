@@ -133,7 +133,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   markUnauthorized: () => {
-    const wasAuthenticated = get().status === 'authenticated';
+    const { status } = get();
+    if (status === 'anonymous') return;
+    const wasAuthenticated = status === 'authenticated';
     set({
       status: 'anonymous',
       user: null,
